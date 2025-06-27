@@ -13,7 +13,7 @@ import gspread
 import json
 
 # Path to Tesseract (already pre-installed on Streamlit Cloud)
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+#pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # === Google Sheets Setup ===
 @st.cache_data
