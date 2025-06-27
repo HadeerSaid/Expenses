@@ -1,7 +1,8 @@
-# app.py
+# app1.py
 import os
 import re
 import cv2
+import json
 import gdown
 import pytesseract
 import pandas as pd
@@ -10,10 +11,9 @@ from sklearn.ensemble import IsolationForest
 import streamlit as st
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
-import json
 
-# Path to Tesseract (already pre-installed on Streamlit Cloud)
-#pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+# Optional: Only needed for local Tesseract install
+# pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # === Google Sheets Setup ===
 @st.cache_data
@@ -27,13 +27,16 @@ def load_data():
 
 # === Receipt Processing ===
 def download_receipt(url):
-    match = re.search(r"id=([a-zA-Z0-9_-]+)", url)
+    match = re.search(r"(?:id=|/d/)([a-zA-Z0-9_-]+)", url)
     if not match:
-        return None
+        raise ValueError(f"❌ Invalid Google Drive link: {url}")
     file_id = match.group(1)
     file_url = f"https://drive.google.com/uc?id={file_id}"
     output_path = f"receipt_{file_id}.jpg"
-    gdown.download(file_url, output_path, quiet=True)
+    try:
+        gdown.download(file_url, output_path, quiet=False)
+    except Exception as e:
+        raise RuntimeError(f"❌ Failed to download: {file_url}\n{e}")
     return output_path
 
 def preprocess_image(image):
@@ -83,9 +86,10 @@ def policy_check(row):
     return " | ".join(flags)
 
 def check_receipt(row):
-    path = download_receipt(row["Upload Receipt"])
-    if not path or not os.path.exists(path):
-        return "⚠️ Download failed", "", 0
+    try:
+        path = download_receipt(row["Upload Receipt"])
+    except Exception as e:
+        return f"⚠️ Download error: {e}", "", 0
     text, conf = extract_text_from_image(path)
     amount = extract_amount_from_text(text)
     quality = "❗ Low OCR quality" if conf < 70 else ""
@@ -97,9 +101,15 @@ def check_receipt(row):
     return "✅ Match", quality, conf
 
 # === Main App ===
+st.set_page_config(page_title="Expense Audit Dashboard", layout="wide")
 st.title("💼 Medical Rep Expense Audit Dashboard")
 
-df = load_data()
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"❌ Failed to load data from Google Sheets.\n{e}")
+    st.stop()
+
 receipt_results, currency_flags, daily_spend_flags, policy_flags = [], [], [], []
 
 with st.spinner("🔍 Processing receipts and flags..."):
@@ -126,4 +136,4 @@ with st.spinner("🔍 Processing receipts and flags..."):
 
 st.success("✅ Audit complete!")
 st.dataframe(df[["Employee ID", "Date", "Amount (EGP)", "Flag Summary"]])
-st.download_button("Download Results as CSV", data=df.to_csv(index=False), file_name="flagged_expenses.csv")
+st.download_button("📥 Download Results as CSV", data=df.to_csv(index=False), file_name="flagged_expenses.csv")
