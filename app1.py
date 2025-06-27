@@ -26,18 +26,28 @@ def load_data():
     return pd.DataFrame(sheet.get_all_records())
 
 # === Receipt Processing ===
+import requests
+
 def download_receipt(url):
-    match = re.search(r"(?:id=|/d/)([a-zA-Z0-9_-]+)", url)
+    match = re.search(r"id=([a-zA-Z0-9_-]+)", url)
     if not match:
-        raise ValueError(f"❌ Invalid Google Drive link: {url}")
+        return None
     file_id = match.group(1)
-    file_url = f"https://drive.google.com/uc?id={file_id}"
+    file_url = f"https://drive.google.com/uc?export=download&id={file_id}"
     output_path = f"receipt_{file_id}.jpg"
+    
     try:
-        gdown.download(file_url, output_path, quiet=False)
+        response = requests.get(file_url, stream=True)
+        if response.status_code == 200:
+            with open(output_path, 'wb') as f:
+                for chunk in response.iter_content(1024):
+                    f.write(chunk)
+            return output_path
+        else:
+            raise Exception(f"HTTP error {response.status_code}")
     except Exception as e:
-        raise RuntimeError(f"❌ Failed to download: {file_url}\n{e}")
-    return output_path
+        st.warning(f"❌ Failed to download: {file_url} | Reason: {e}")
+        return None
 
 def preprocess_image(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
