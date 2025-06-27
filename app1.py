@@ -10,15 +10,17 @@ from sklearn.ensemble import IsolationForest
 import streamlit as st
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
+import json
 
-# Path to Tesseract
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"  # for local testing, use full path; on Streamlit Cloud it’s pre-installed
+# Path to Tesseract (already pre-installed on Streamlit Cloud)
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # === Google Sheets Setup ===
 @st.cache_data
 def load_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("service_account_key.json", scope)
+    creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open("Medical Rep Expense Submission (Responses)").sheet1
     return pd.DataFrame(sheet.get_all_records())
